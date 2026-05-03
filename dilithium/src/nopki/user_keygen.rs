@@ -35,6 +35,11 @@ pub struct SecretKey {
     pub s12_prime: Polyvecl,
 }
 
+#[derive(Debug)]
+pub enum KeygenError {
+    ThresholdError,
+}
+
 pub fn user_generate_key(
     // pk:       &mut [u8],
     // sk:       &mut [u8],
@@ -44,7 +49,7 @@ pub fn user_generate_key(
     params:   Params,
     ppk:      PartialPrivateKey,
     seed:     Option<&[u8]>,
-) -> (PublicKey, SecretKey) {
+) -> Result<(PublicKey, SecretKey), KeygenError> {
     assert!(seed.is_none());
     // Buffer to contain seed.
     let mut init_seed = [0u8; SEEDBYTES];
@@ -204,7 +209,14 @@ pub fn user_generate_key(
 
     let mut nonce = 0u16;
 
+    const RETRY_THRESHOLD: usize = 25;
+    let mut retry = 0;
+
     loop {
+        if retry == RETRY_THRESHOLD {
+            break Err(KeygenError::ThresholdError);
+        }
+
         // let mut v1 = v1;
 
         // Sample intermediate vector y12
@@ -293,11 +305,13 @@ pub fn user_generate_key(
         // Check norm of z = (z1 z2)^T
         if polyvecl_chknorm(&z1, (GAMMA1 - BETA) as i32) > 0 {
             eprintln!("fail 1: z1 norm");
+            retry += 1;
             continue;
         }
 
         if polyvecl_chknorm(&z2, (GAMMA1 - BETA) as i32) > 0 {
             eprintln!("fail 1: z2 norm");
+            retry += 1;
             continue;
         }
 
@@ -322,6 +336,7 @@ pub fn user_generate_key(
         // Check norm of rpoly_l.
         if polyveck_chknorm(&rpoly_l, (GAMMA2 - BETA) as i32) > 0 {
             eprintln!("fail 2: rpoly_l norm");
+            retry += 1;
             continue;
         }
 
@@ -345,6 +360,7 @@ pub fn user_generate_key(
         // The infinite norm must be strictly less than 1, ie be 0.
         if polyveck_chknorm(&rh_vh_diff, 1 as i32) > 0 {
             eprintln!("fail 3: rpoly_h != v1_full_h");
+            retry += 1;
             continue;
         }
 
@@ -367,6 +383,7 @@ pub fn user_generate_key(
         // Check if norm of cb is less than GAMMA2.
         if polyveck_chknorm(&cb, GAMMA2 as i32) > 0 {
             eprintln!("fail 4: cb norm");
+            retry += 1;
             continue;
         }
 
@@ -381,10 +398,15 @@ pub fn user_generate_key(
             b11_l, b12_l, y11, y12, s11, s12_prime
         };
 
-        break (pk, sk);
+        break Ok((pk, sk));
 
         // pack_sk
     }
+}
+
+#[derive(Debug)]
+pub enum SigError {
+    ThresholdError, // Too many attempts retrying within a loop.
 }
 
 #[derive(Copy, Clone)]
@@ -402,7 +424,7 @@ pub fn generate_signature(
     params:     Params, 
     public_key: PublicKey,
     secret_key: SecretKey,
-) -> Signature {
+) -> Result<Signature, SigError> {
 
     assert_eq!(identity.len(), ID_SIZE);
 
@@ -484,6 +506,14 @@ pub fn generate_signature(
     let mut v1 = v11;
     polyveck_add(&mut v1, &v12);
     // polyveck_reduce(&mut v1); // TODO: is reduction necessary?
+
+    // Decompose v1 into high and low parts.
+    let mut v1_h = v1;
+    let mut v1_l = Polyveck::default();
+    polyveck_reduce(&mut v1_h);
+    polyveck_caddq(&mut v1_h);
+    polyveck_decompose(&mut v1_h, &mut v1_l);
+
 
     // 7) Compute c := CRH(r || v11_h + v12_h)
     let mut v_h_sum = v11_h;
@@ -570,7 +600,9 @@ pub fn generate_signature(
 
     polyveck_sub(&mut v1_hint_part, &c1_e11);
     polyveck_sub(&mut v1_hint_part, &c2_e12);
+    polyveck_reduce(&mut v1_hint_part);
 
+    // Decompose v1_hint_part into high and low parts.
     let (mut v1_hint_part_h, mut v1_hint_part_l) = (Polyveck::default(), 
         Polyveck::default());
 
@@ -578,13 +610,28 @@ pub fn generate_signature(
     polyveck_caddq(&mut v1_hint_part_h);
     polyveck_decompose(&mut v1_hint_part_h, &mut v1_hint_part_l);
 
+    // Test-13
+    if cfg!(debug_assertions) {
+        for i in 0..K {
+            assert_eq!(v1_hint_part_h.vec[i].coeffs, v1_h.vec[i].coeffs, "i: {i}");
+        }
+        println!("Test-13 Passed");
+    }
+
     let mut nonce = 0u16;
     let (mut y_i1, mut y_i2) = (Polyvecl::default(), Polyvecl::default());
 
     // Reset state, this will be used later to sample c_i
     let mut state = KeccakState::default();
 
+    const RETRY_THRESHOLD: usize = 25;
+    let mut retry = 0;
+
     loop {
+        if retry == RETRY_THRESHOLD {
+            break Err(SigError::ThresholdError);
+        }
+
         // Sample intermediate vectors y_i1 and y_i2.
         polyvecl_uniform_gamma1(&mut y_i1, &r_prime, nonce);
         nonce += 1;
@@ -676,6 +723,7 @@ pub fn generate_signature(
         // Check norm of z_i1.
         if polyvecl_chknorm(&z_i1, (GAMMA1 - BETA) as i32) > 0 {
             eprintln!("sig: fail at z_i1");
+            retry += 1;
             continue;
         }
 
@@ -687,6 +735,7 @@ pub fn generate_signature(
         // Check norm of z_i2.
         if polyvecl_chknorm(&z_i2, (GAMMA1 - BETA) as i32) > 0 {
             eprintln!("sig: fail at z_i2");
+            retry += 1;
             continue;
         }
 
@@ -715,20 +764,30 @@ pub fn generate_signature(
         // Check norm of r_i_poly_l
         if polyveck_chknorm(&r_i_poly_l, (GAMMA2 - BETA) as i32) > 0 {
             eprintln!("sig: fail at r_i_poly_l");
+            retry += 1;
             continue;
         }
 
         // Check whether rpoly and v_i_h have same high bits.
         let mut v_i_h = v_i;
         let mut v_i_l = Polyveck::default();
+        polyveck_reduce(&mut v_i_h);
         polyveck_caddq(&mut v_i_h);
         polyveck_decompose(&mut v_i_h, &mut v_i_l);
+
+        if cfg!(debug_assertions) {
+            for i in 0..K {
+                assert_eq!(v_i_h.vec[i].coeffs, r_i_poly_h.vec[i].coeffs, "i: {i}");
+            }
+            println!("Test-14 Passed");
+        }
 
         let mut rih_vih_diff = r_i_poly_h;
         polyveck_sub(&mut rih_vih_diff, &v_i_h);
         polyveck_reduce(&mut rih_vih_diff);
 
         if polyveck_chknorm(&rih_vih_diff, 1 as i32) > 0 {
+            retry += 1;
             continue;
         }
 
@@ -788,6 +847,7 @@ pub fn generate_signature(
         // Check norm of h_i
         if polyveck_chknorm(&h_i, 2 * GAMMA2_I32) > 0 {
             eprintln!("sig: fail at h_i norm");
+            retry += 1;
             continue;
         }
 
@@ -826,16 +886,51 @@ pub fn generate_signature(
 
         let mut h = h_i;
         let n = polyveck_make_hint_scaled(&mut h, &h_i, &y);
-        /*
         if n > OMEGA as i32 {
             eprintln!("sig: fail at h_i vs omega, n: {n}, omega: {OMEGA}");
+            retry += 1;
             continue;
         }
-        */
-        println!("OMEGA: {OMEGA}, n: {n}");
+        eprintln!("OMEGA: {OMEGA}, n: {n}");
 
         // Sanity check.
+        if cfg!(debug_assertions) {
+            let mut before_sum = v1_hint_part;
+            polyveck_add(&mut before_sum, &r_i_poly);
+            polyveck_sub(&mut before_sum, &h_i);
+            polyveck_reduce(&mut before_sum);
+            polyveck_caddq(&mut before_sum);
 
+            let mut summed = before_sum;
+            polyveck_add(&mut summed, &h_i);
+            polyveck_reduce(&mut summed);
+            polyveck_caddq(&mut summed);
+
+            let (mut summed_h, mut summed_l) = (Polyveck::default(), Polyveck::default());
+            polyveck_decompose_scaled(&mut summed_h, &mut summed_l, &summed);
+
+            let mut hint = Polyveck::default();
+            polyveck_make_hint_scaled(&mut hint, &h_i, &before_sum);
+
+            let mut high_hinted = Polyveck::default();
+            polyveck_use_hint_scaled(&mut high_hinted, &hint, &before_sum);
+
+            /*
+            println!("high_hinted:\n{:?}", high_hinted.vec[0].coeffs);
+            println!("summed_h:\n{:?}", summed_h.vec[0].coeffs);
+            */
+
+            for i in 0..K {
+                for j in 0..N {
+                    assert_eq!(
+                        summed_h.vec[i].coeffs[j],
+                        high_hinted.vec[i].coeffs[j],
+                        "i: {i}, j: {j}",
+                    );
+                }
+            }
+            println!("\nSanity Check Pass!");
+        }
 
         let signature = Signature {
             z_i1,
@@ -849,9 +944,10 @@ pub fn generate_signature(
         // println!("r: (verify)\n{:?}", r);
 
         // println!("v_sum_packed: (signature)\n{:?}", v_sum_packed);
-        println!("v_h_sum: {:?}", v_h_sum.vec[0].coeffs);
 
-        break signature;
+        // println!("v_h_sum: {:?}", v_h_sum.vec[0].coeffs);
+
+        break Ok(signature);
     }
 }
 

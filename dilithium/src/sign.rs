@@ -162,7 +162,7 @@ pub fn crypto_sign_signature(sig: &mut [u8], m: &[u8], sk: &[u8]) {
 
     polyveck_add(&mut w0, &h);
     let n = polyveck_make_hint(&mut h, &w0, &w1);
-    println!("omega: {}, n: {}", OMEGA, n);
+    // println!("omega: {}, n: {}", OMEGA, n);
     if n > OMEGA as i32 {
       continue;
     }
