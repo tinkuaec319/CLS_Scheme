@@ -1,0 +1,8 @@
+[package]
+name = "xperiment"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pqc_dilithium = { version = "0.2.0", path = "../dilithium" }
+rand = "0.10.1"
