@@ -23,15 +23,15 @@ The above command will print something like this.
 
 ```
 ----------------------------- NOPKI Dilithium-3 ---------------------------
-ppk elapsed: 225 us
-keygen elapsed: 1620 us
-sig elapsed: 3388 us
-verify elapsed: 556 us
+ppk elapsed: 106 us
+keygen elapsed: 721 us
+sig elapsed: 1527 us
+verify elapsed: 259 us
 total runs: 1000, verification success: 1000
 ----------------------------- PKI Dilithium-3 -----------------------------
-keygen elapsed: 217 us
-sig elapsed: 729 us
-verify elapsed: 198 us
+keygen elapsed: 101 us
+sig elapsed: 347 us
+verify elapsed: 93 us
 total runs: 1000, verification success: 1000
 ```
 
