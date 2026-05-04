@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::params::*;
 use crate::poly::*;
 
@@ -306,6 +308,35 @@ pub fn polyveck_decompose_scaled(high: &mut Polyveck, low: &mut Polyveck,
     }
 }
 
+pub fn polyveck_make_hint_simple(
+    hint: &mut Polyveck,
+    z: &Polyveck,
+    y: &Polyveck
+) -> i32 {
+    let mut s = 0;
+    for i in 0..K {
+        s += poly_make_hint_simple(&mut hint.vec[i], &z.vec[i], &y.vec[i]);
+    }
+
+    return s;
+}
+
+pub fn polyveck_use_hint_simple(
+    high: &mut Polyveck,
+    hint: &Polyveck,
+    y:    &Polyveck,
+) {
+    for i in 0..K {
+        poly_use_hint_simple(&mut high.vec[i], &hint.vec[i], &y.vec[i]);
+    }
+}
+
+pub fn polyveck_decompose_simple(high: &mut Polyveck, low: &mut Polyveck,
+    y: &Polyveck) {
+    for i in 0..K {
+        poly_decompose_simple(&mut high.vec[i], &mut low.vec[i], &y.vec[i]);
+    }
+}
 
 pub fn polyveck_pack_w1(r: &mut [u8], w1: &Polyveck) {
   for i in 0..K {

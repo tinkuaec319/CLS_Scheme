@@ -3,6 +3,8 @@ use pqc_dilithium::*;
 use std::time::Instant;
 
 const RUNS: usize = 1000;
+const MSG_SIZE: usize = 1024; // different messages of size 1024 bytes is
+                              // encrypted 1000 times
 
 fn main() {
     let mut iterations = 0usize;
@@ -10,15 +12,26 @@ fn main() {
     let mut nopki_ppk_elapsed = 0u128;
     let mut nopki_keygen_elapsed = 0u128;
     let mut nopki_sig_elapsed = 0u128;
+    let mut nopki_verify_elapsed = 0u128;
+    let mut nopki_verify_success = 0;
 
     let mut pki_keygen_elapsed = 0u128;
     let mut pki_sig_elapsed = 0u128;
+    let mut pki_verify_elapsed = 0u128;
+    let mut pki_verify_success = 0;
 
+    let mut message: Vec<u8> = Vec::with_capacity(MSG_SIZE);
+    for _ in 0..MSG_SIZE {
+        message.push(0);
+    }
 
     loop {
         if iterations == RUNS {
             break;
         }
+
+        // Create a random message for this run.
+        rand::fill(&mut message[..]);
 
         // Create rho and ID
         let mut rho = [0u8; SEEDBYTES];
@@ -52,12 +65,13 @@ fn main() {
         nopki_ppk_elapsed += ppk_elapsed_one.as_micros();
         nopki_keygen_elapsed += nopki_keygen_elapsed_one.as_micros();
 
+        // Generate NOPKI signature.
         let nopki_sig_begin = Instant::now();
-        let _nopki_signature;
+        let nopki_signature;
         if let Ok(signature) = nopki::user_keygen::generate_signature(
-            "lorem ipsum dolor sit amet".as_bytes(),
+            &message,
             &identity, params, nopki_pk, nopki_sk){
-            _nopki_signature = signature;
+            nopki_signature = signature;
         } else {
 
             continue;
@@ -65,28 +79,65 @@ fn main() {
         let nopki_sig_elapsed_one = nopki_sig_begin.elapsed();
         nopki_sig_elapsed += nopki_sig_elapsed_one.as_micros();
 
+        // Verify NOPKI signature.
+        let nopki_verify_begin = Instant::now();
+        let verify_result = nopki::user_keygen::verify_sign(
+            &message,
+            &identity,
+            nopki_signature,
+            params,
+            nopki_pk
+        );
+        let nopki_verify_elapsed_one = nopki_verify_begin.elapsed();
+        nopki_verify_elapsed += nopki_verify_elapsed_one.as_micros();
+
+        // If NOPKI signature verification succeeds.
+        if verify_result {
+            nopki_verify_success += 1;
+        }
+
+        // Generate PKI key.
         let pki_keygen_begin = Instant::now();
         let keys = Keypair::generate();
         let pki_keygen_elapsed_one = pki_keygen_begin.elapsed();
         pki_keygen_elapsed += pki_keygen_elapsed_one.as_micros();
 
+        // Generate PKI signature.
         let pki_sig_begin = Instant::now();
-        let pki_sign = keys.sign("lorem ipsum dolor sit amet".as_bytes());
+        let pki_sign = keys.sign(&message);
         let pki_sig_elapsed_one = pki_sig_begin.elapsed();
         pki_sig_elapsed += pki_sig_elapsed_one.as_micros();
 
+        // Verify signature done using PKI.
+        let pki_verify_begin = Instant::now();
+        let sig_verify = verify(&pki_sign, &message,
+            &keys.public);
+        let pki_verify_elapsed_one = pki_verify_begin.elapsed();
+        pki_verify_elapsed += pki_verify_elapsed_one.as_micros();
+
+        // If PKI signature verification succeeds.
+        if sig_verify.is_ok() {
+            pki_verify_success += 1;
+        }
 
         iterations += 1;
     }
 
-    println!("-----------------------------NOPKI---------------------------");
+
+    println!("------------------- NOPKI Dilithium-5 ---------------------------");
     println!("ppk elapsed: {} us", nopki_ppk_elapsed / RUNS as u128);
     println!("keygen elapsed: {} us", nopki_keygen_elapsed / RUNS as u128);
     println!("sig elapsed: {} us", nopki_sig_elapsed / RUNS as u128);
+    println!("verify elapsed: {} us", nopki_verify_elapsed / RUNS as u128);
+    println!("total runs: {}, verification success: {}", RUNS, nopki_verify_success);
+    println!("random message size of each run: {} bytes", MSG_SIZE);
 
-    println!("-----------------------------PKI---------------------------");
+    println!("--------------------- PKI Dilithium-5 ---------------------------");
     println!("keygen elapsed: {} us", pki_keygen_elapsed / RUNS as u128);
     println!("sig elapsed: {} us", pki_sig_elapsed / RUNS as u128);
+    println!("verify elapsed: {} us", pki_verify_elapsed / RUNS as u128);
+    println!("total runs: {}, verification success: {}", RUNS, pki_verify_success);
+    println!("random message size of each run: {} bytes", MSG_SIZE);
 
 }
 

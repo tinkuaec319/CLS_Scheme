@@ -1,37 +1,48 @@
-CLS\_Scheme
+To implement our Certificateless Signature Scheme we have modified the
+dilithium implementation present at [Argyle-Software/dilithium](https://github.com/Argyle-Software/dilithium).
+The modified code is present in the `dilithium` directory.
 
-- Using a modified version of [dilithium](https://github.com/Argyle-Software/dilithium).
+The directories `xperiment_mode2`, `xperiment_mode3` and `xperiment_mode5` are
+running the experiments for different levels of dilithium. They compare the
+running times of our NO-PKI scheme with a version of dilithium that use PKI infrastructure.
 
-To run the benchmarks, for linux based systems.
-```
-cargo run --release 2>/dev/null # takes a few seconds to build and run.
-
-```
-Run this command form the 'xperiments' directory.
-
-Some unnecessary logs are also printed, thats why pipe them to dev null.
-
-Example results: NOPKI is our implementation, comparing it with the version that users PKI.
-```
------------------------------NOPKI---------------------------
-ppk elapsed: 258 us
-keygen elapsed: 1500 us
-sig elapsed: 2259 us
------------------------------PKI---------------------------
-keygen elapsed: 243 us
-sig elapsed: 809 us
+## Running the benchmarks.
+To run the benchmark for any level of dilithim just go to that respective mode's
+xperiment directory. And run the following command:
 
 ```
-ppk elapsed: partial private key generation time. \
-keygen elapsed: key generation time in different schemes. \
-sig elapsed: time taken for signing.
+cargo run --release
+```
 
-By default the tests are run for dilithium-3, feature flag `mode3` for `dilithium` crate. 
+This might take a few seconds to compile and run.
 
-To run the experiments for mode2 and mode5 just add them as the required features for `dilithium` dependency in the `Cargo.toml` file of `xperiments`. At a time only add one mode, see [`dilithium`](https://github.com/Argyle-Software/dilithium) for more details. Here is an example:
+NOTE: you will need `Rust` setup and its package manager `cargo` for this. To know how to
+install Rust, follow [Install Rust](https://rust-lang.org/tools/install/).
 
-```toml
-[dependencies]
-pqc_dilithium = { version = "0.2.0", path = "../dilithium", features = ["mode2"] }
+The above command will print something like this.
 
 ```
+----------------------------- NOPKI Dilithium-3 ---------------------------
+ppk elapsed: 225 us
+keygen elapsed: 1620 us
+sig elapsed: 3388 us
+verify elapsed: 556 us
+total runs: 1000, verification success: 1000
+----------------------------- PKI Dilithium-3 -----------------------------
+keygen elapsed: 217 us
+sig elapsed: 729 us
+verify elapsed: 198 us
+total runs: 1000, verification success: 1000
+```
+
+This compares our NO-PKI dilithium with one that uses PKI infrastructure.
+
+This particular run is for dilithium3, i.e. from `xperiment_mode3` directory.
+
+`ppk elapsed`: time taken to generate partial private key. \
+`keygen elapsed`: time taken to generate public and secret key \
+`sig elapsed`: time taken to sign a message \
+`verify elapsed`: time taken to verify the signature for a message
+
+...and also print the number of times the whole process is done. By default 1000
+iterations are done, each with a random message of length 1024 bytes.

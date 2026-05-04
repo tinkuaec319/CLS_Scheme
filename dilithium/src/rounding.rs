@@ -145,3 +145,74 @@ pub fn make_hint_scaled(a0: i32, a1: i32) -> u8 {
     (r_h != r_z_h) as u8
 }
 
+pub fn decompose_simple(a0: &mut i32, a: i32) -> i32 {
+    assert!(a >= 0);
+    const ALPHA: i32 = 2 * GAMMA2_I32;
+
+    let mut r0 = a % ALPHA;
+    if r0 > ALPHA / 2 {
+        r0 -= ALPHA;
+    } else if r0 <= -ALPHA / 2 {
+        r0 += ALPHA;
+    }
+
+    let r1: i32;
+    if a - r0 == Q_I32 - 1 {
+        r1 = 0;
+        r0 -= 1;
+    } else {
+        r1 = (a - r0) / ALPHA;
+    }
+
+    *a0 = r0;
+
+    r1
+}
+
+pub fn use_hint_simple(a: i32, hint: u8) -> i32 {
+    assert!(hint == 0 || hint == 1);
+    assert!(a >= 0);
+
+    let mut a0 = 0i32;
+    let a1 = decompose_simple(&mut a0, a);
+
+    if hint == 0 {
+        return a1;
+    }
+
+    const M: i32 = if GAMMA2 == (Q - 1) / 32 {
+        16
+    } else {
+        44
+    };
+
+    if a0 > 0 {
+        return (((a1 + 1) % M) + M) % M;
+    } else {
+        return (((a1 - 1) % M) + M) % M;
+    }
+}
+
+pub fn make_hint_simple(a0: i32, a1: i32) -> u8 {
+    assert!(a1 >= 0);
+    /*
+    if a0 > GAMMA2_I32 || a0 < -GAMMA2_I32 || (a0 == -GAMMA2_I32 && a1 != 0) {
+        return 1;
+    }
+    return 0;
+    */
+
+    let z = a0;
+    let r = a1;
+
+    let r_z = (((r + z) % Q_I32) + Q_I32) % Q_I32;
+
+    let mut r_z_l = 0;
+    let r_z_h = decompose_simple(&mut r_z_l, r_z);
+
+    let mut r_l = 0;
+    let r_h = decompose_simple(&mut r_l, r);
+
+    (r_h != r_z_h) as u8
+}
+

@@ -1,0 +1,8 @@
+[package]
+name = "mode5"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pqc_dilithium = { version = "0.2.0", path = "../dilithium", features = ["mode5"] }
+rand = "0.10.1"

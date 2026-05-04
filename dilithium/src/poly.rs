@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::{
   fips202::*, ntt::*, params::*, reduce::*, rounding::*, symmetric::*,
 };
@@ -137,6 +139,31 @@ pub fn poly_decompose_scaled(high: &mut Poly, low: &mut Poly, y: &Poly) {
     }
 }
 
+pub fn poly_make_hint_simple(hint: &mut Poly, z: &Poly, y: &Poly) -> i32 {
+    let mut s = 0;
+    for i in 0..N {
+        hint.coeffs[i] = make_hint_simple(z.coeffs[i], y.coeffs[i]) as i32;
+        s += hint.coeffs[i];
+    }
+
+    return s;
+}
+
+pub fn poly_use_hint_simple(high: &mut Poly, hint: &Poly, y: &Poly) {
+    for i in 0..N {
+        high.coeffs[i] = use_hint_simple(y.coeffs[i], hint.coeffs[i] as u8);
+    }
+}
+
+pub fn poly_decompose_simple(high: &mut Poly, low: &mut Poly, y: &Poly) {
+    for i in 0..N {
+        let mut coeff_low = 0;
+        let coeff_high = decompose_simple(&mut coeff_low, y.coeffs[i]);
+
+        high.coeffs[i] = coeff_high;
+        low.coeffs[i] = coeff_low;
+    }
+}
 
 /// Use hint polynomial to correct the high bits of a polynomial.
 ///
